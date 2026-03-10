@@ -149,10 +149,9 @@ export function findBalanceSuggestions(rawTeams, features, conflicts) {
 }
 
 function calcBalance(teams, features, conflicts) {
-  const scores = teams.map(t => t.reduce((s, p) => s + p.score, 0))
-  const avgScore = scores.reduce((a, b) => a + b, 0) / teams.length
-  const scoreVar = scores.reduce((s, v) => s + (v - avgScore) ** 2, 0)
-
+  // Balance each feature independently across teams.
+  // This prevents "tall+slow vs short+fast" imbalances that a composite
+  // score would miss. Each feature's variance is weighted by importance.
   let featureVar = 0
   for (const f of features) {
     const fScores = teams.map(t => t.reduce((s, p) => s + (p.ratings[f.id] || 0), 0))
@@ -160,6 +159,7 @@ function calcBalance(teams, features, conflicts) {
     featureVar += fScores.reduce((s, v) => s + (v - avg) ** 2, 0) * f.weight
   }
 
+  // Conflict penalty
   let penalty = 0
   for (const team of teams) {
     const ids = new Set(team.map(p => p.id))
@@ -168,7 +168,7 @@ function calcBalance(teams, features, conflicts) {
     }
   }
 
-  return scoreVar + featureVar + penalty
+  return featureVar + penalty
 }
 
 function teamHasConflicts(team, conflicts) {

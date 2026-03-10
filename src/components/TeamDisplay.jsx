@@ -1,32 +1,76 @@
 export default function TeamDisplay({ teams, features, onPlayerClick, selectedPlayerId }) {
   if (!teams || teams.length === 0) return null
 
-  const maxTotal = Math.max(...teams.map(t => t.totalScore), 1)
-  const minTotal = Math.min(...teams.map(t => t.totalScore))
-  const spread = maxTotal > 0 ? ((maxTotal - minTotal) / maxTotal * 100).toFixed(1) : 0
+  // Calculate per-feature balance quality
+  const featureDiffs = features.map(f => {
+    const totals = teams.map(t => {
+      const fs = t.featureScores.find(s => s.feature.id === f.id)
+      return fs ? fs.total : 0
+    })
+    const max = Math.max(...totals)
+    const min = Math.min(...totals)
+    return { feature: f, totals, diff: max - min, maxVal: max }
+  })
+
+  const allBalanced = featureDiffs.every(d => d.maxVal === 0 || d.diff / d.maxVal <= 0.1)
+  const anyBad = featureDiffs.some(d => d.maxVal > 0 && d.diff / d.maxVal > 0.25)
 
   return (
     <div className="space-y-3">
       {/* Balance badge */}
       <div className="flex justify-center">
         <span className={`text-xs font-medium px-3 py-1 rounded-full ${
-          spread <= 5 ? 'bg-green-100 text-green-700' :
-          spread <= 15 ? 'bg-amber-100 text-amber-700' :
-          'bg-red-100 text-red-700'
+          allBalanced ? 'bg-green-100 text-green-700' :
+          anyBad ? 'bg-red-100 text-red-700' :
+          'bg-amber-100 text-amber-700'
         }`}>
-          {spread <= 5 ? 'Excellent' : spread <= 15 ? 'Good' : 'Fair'} balance ({spread}% spread)
+          {allBalanced ? 'Excellent' : anyBad ? 'Fair' : 'Good'} balance
         </span>
       </div>
+
+      {/* Per-feature balance bars (the main view now) */}
+      {features.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
+          {featureDiffs.map(({ feature: f, totals, diff, maxVal }) => {
+            const barMax = Math.max(...totals, 1)
+            return (
+              <div key={f.id}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-gray-600">{f.name}</span>
+                  <span className={`text-[10px] font-mono font-medium ${
+                    diff === 0 ? 'text-green-600' :
+                    maxVal > 0 && diff / maxVal > 0.2 ? 'text-red-500' :
+                    'text-amber-600'
+                  }`}>
+                    {diff === 0 ? 'equal' : `diff ${diff}`}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {teams.map((team, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className={`text-[10px] w-5 font-medium ${team.color.text}`}>T{i + 1}</span>
+                      <div className="flex-1 bg-gray-100 rounded-full h-2.5">
+                        <div
+                          className={`${team.color.header} rounded-full h-2.5 transition-all`}
+                          style={{ width: `${(totals[i] / barMax) * 100}%`, minWidth: totals[i] > 0 ? '8px' : '0' }}
+                        />
+                      </div>
+                      <span className="text-[10px] font-mono text-gray-500 w-6 text-right">{totals[i]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Team Cards */}
       {teams.map((team, i) => (
         <div key={i} className={`rounded-xl border-2 ${team.color.border} ${team.color.bg} overflow-hidden`}>
           <div className={`${team.color.header} text-white px-4 py-2.5 flex items-center justify-between`}>
             <span className="font-bold text-[15px]">Team {i + 1}</span>
-            <div className="flex items-center gap-3">
-              <span className="text-sm opacity-90 font-mono">{team.totalScore.toFixed(1)} pts</span>
-              <span className="text-sm opacity-70">{team.players.length}p</span>
-            </div>
+            <span className="text-sm opacity-70">{team.players.length} players</span>
           </div>
           <div className="p-2.5 space-y-1.5">
             {team.players.map(player => {
@@ -44,58 +88,12 @@ export default function TeamDisplay({ teams, features, onPlayerClick, selectedPl
                   }`}
                 >
                   <span className="font-medium text-gray-800 text-[15px]">{player.name}</span>
-                  <span className="text-xs text-gray-400 font-mono">{player.score.toFixed(1)}</span>
                 </div>
               )
             })}
           </div>
         </div>
       ))}
-
-      {/* Per-feature comparison */}
-      {features.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm p-4 overflow-x-auto">
-          <h3 className="font-semibold text-gray-800 text-sm mb-2">Feature Breakdown</h3>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left py-1.5 text-gray-500 font-medium text-xs">Feature</th>
-                {teams.map((team, i) => (
-                  <th key={i} className={`text-center py-1.5 font-medium text-xs ${team.color.text}`}>T{i + 1}</th>
-                ))}
-                <th className="text-center py-1.5 text-gray-500 font-medium text-xs">Diff</th>
-              </tr>
-            </thead>
-            <tbody>
-              {features.map(f => {
-                const totals = teams.map(t => {
-                  const fs = t.featureScores.find(s => s.feature.id === f.id)
-                  return fs ? fs.total : 0
-                })
-                const diff = Math.max(...totals) - Math.min(...totals)
-                return (
-                  <tr key={f.id} className="border-b border-gray-50">
-                    <td className="py-1.5 text-gray-600 text-xs">{f.name}</td>
-                    {teams.map((team, i) => {
-                      const fs = team.featureScores.find(s => s.feature.id === f.id)
-                      return (
-                        <td key={i} className="text-center py-1.5 font-mono text-xs text-gray-700">
-                          {fs ? fs.total : 0}
-                        </td>
-                      )
-                    })}
-                    <td className={`text-center py-1.5 font-mono text-xs font-medium ${
-                      diff === 0 ? 'text-green-600' : diff <= 3 ? 'text-amber-600' : 'text-red-600'
-                    }`}>
-                      {diff === 0 ? '=' : diff}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
 
       {teams.some(t => t.hasConflicts) && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-600 text-sm text-center">
