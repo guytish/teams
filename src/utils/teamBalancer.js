@@ -4,40 +4,25 @@ export const TEAM_COLORS = [
   { name: 'Green', bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', header: 'bg-green-500' },
 ]
 
-/**
- * Generate balanced teams from players.
- * Returns raw team arrays (each team = array of scored player objects).
- * Players not assigned to teams are implicitly on the bench.
- *
- * @param {Array} players - players to distribute
- * @param {Array} features - feature definitions
- * @param {Array} conflicts - conflict pairs
- * @param {number} numTeams - number of teams (2 or 3)
- * @param {number} maxPerTeam - max players per team (0 = auto, split all evenly)
- */
 export function generateTeams(players, features, conflicts, numTeams, maxPerTeam = 0) {
   if (players.length < numTeams) return []
 
-  // Score all players
   const scored = players.map(p => ({
     ...p,
     score: features.reduce((sum, f) => sum + (p.ratings[f.id] || 0) * f.weight, 0),
   }))
 
-  // Random perturbation for variety
   const maxScore = Math.max(...scored.map(p => p.score), 1)
   scored.forEach(p => {
     p.sortScore = p.score + (Math.random() - 0.5) * maxScore * 0.1
   })
   scored.sort((a, b) => b.sortScore - a.sortScore)
 
-  // Determine how many play
   const perTeam = maxPerTeam > 0 ? maxPerTeam : Math.ceil(scored.length / numTeams)
   const totalActive = Math.min(scored.length, numTeams * perTeam)
   const active = scored.slice(0, totalActive)
   const benchPool = scored.slice(totalActive)
 
-  // Snake draft
   const teams = Array.from({ length: numTeams }, () => [])
   let idx = 0
   let direction = 1
@@ -51,7 +36,7 @@ export function generateTeams(players, features, conflicts, numTeams, maxPerTeam
     }
   }
 
-  // Hill-climbing optimization
+  // Hill-climbing
   let currentMetric = calcBalance(teams, features, conflicts)
   let improved = true
   let iterations = 0
@@ -60,7 +45,6 @@ export function generateTeams(players, features, conflicts, numTeams, maxPerTeam
     improved = false
     iterations++
 
-    // Team-team swaps
     for (let t1 = 0; t1 < numTeams; t1++) {
       for (let t2 = t1 + 1; t2 < numTeams; t2++) {
         for (let p1 = 0; p1 < teams[t1].length; p1++) {
@@ -78,7 +62,6 @@ export function generateTeams(players, features, conflicts, numTeams, maxPerTeam
       }
     }
 
-    // Team-bench swaps (swap a team player with a bench player if it improves balance)
     for (let t = 0; t < numTeams; t++) {
       for (let tp = 0; tp < teams[t].length; tp++) {
         for (let bp = 0; bp < benchPool.length; bp++) {
@@ -98,9 +81,6 @@ export function generateTeams(players, features, conflicts, numTeams, maxPerTeam
   return teams
 }
 
-/**
- * Build display-ready team objects with stats from raw team arrays.
- */
 export function recalcTeams(rawTeams, features, conflicts) {
   return rawTeams.map((team, i) => ({
     players: team,
@@ -115,6 +95,57 @@ export function recalcTeams(rawTeams, features, conflicts) {
     })),
     hasConflicts: teamHasConflicts(team, conflicts),
   }))
+}
+
+/**
+ * Find balance-improving swaps for the given teams.
+ * Returns the optimized teams and a list of player moves.
+ */
+export function findBalanceSuggestions(rawTeams, features, conflicts) {
+  // Map players to teams before optimization
+  const before = {}
+  rawTeams.forEach((team, t) => team.forEach(p => { before[p.id] = t }))
+
+  // Deep copy and optimize
+  const optimized = rawTeams.map(t => [...t])
+  let metric = calcBalance(optimized, features, conflicts)
+  let improved = true
+  let iterations = 0
+
+  while (improved && iterations < 50) {
+    improved = false
+    iterations++
+    for (let t1 = 0; t1 < optimized.length; t1++) {
+      for (let t2 = t1 + 1; t2 < optimized.length; t2++) {
+        for (let p1 = 0; p1 < optimized[t1].length; p1++) {
+          for (let p2 = 0; p2 < optimized[t2].length; p2++) {
+            ;[optimized[t1][p1], optimized[t2][p2]] = [optimized[t2][p2], optimized[t1][p1]]
+            const nm = calcBalance(optimized, features, conflicts)
+            if (nm < metric - 0.1) {
+              metric = nm
+              improved = true
+            } else {
+              ;[optimized[t1][p1], optimized[t2][p2]] = [optimized[t2][p2], optimized[t1][p1]]
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Find what changed
+  const after = {}
+  optimized.forEach((team, t) => team.forEach(p => { after[p.id] = t }))
+
+  const moves = []
+  for (const id of Object.keys(before)) {
+    if (before[id] !== after[id]) {
+      const player = rawTeams.flat().find(p => p.id === id)
+      moves.push({ player, from: before[id], to: after[id] })
+    }
+  }
+
+  return { optimizedTeams: optimized, moves }
 }
 
 function calcBalance(teams, features, conflicts) {
