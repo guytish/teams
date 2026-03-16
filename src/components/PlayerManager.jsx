@@ -17,7 +17,9 @@ export default function PlayerManager() {
   useEffect(() => {
     setLocal(getPlayers())
     setFeatures(getFeatures())
-    loadPresets().then(setPresetsState).catch(() => {})
+    loadPresets()
+      .then(setPresetsState)
+      .catch(() => setPresetsState({ monday: [], friday: [] }))
   }, [])
 
   const toggleDay = async (playerId, day) => {

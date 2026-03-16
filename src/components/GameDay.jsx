@@ -72,7 +72,9 @@ export default function GameDay() {
     setAllPlayers(getPlayers())
     setFeatures(getFeatures())
     setConflicts(getConflicts())
-    loadPresets().then(setPresets).catch(() => {})
+    loadPresets()
+      .then(setPresets)
+      .catch(() => setPresets({ monday: [], friday: [] }))
   }, [])
 
   const scoredPlayers = useMemo(() =>
