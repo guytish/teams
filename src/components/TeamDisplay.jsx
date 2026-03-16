@@ -1,4 +1,4 @@
-export default function TeamDisplay({ teams, features, onPlayerClick, selectedPlayerId }) {
+export default function TeamDisplay({ teams, features, onPlayerClick, selectedPlayerId, isAdmin }) {
   if (!teams || teams.length === 0) return null
 
   // Calculate per-feature balance quality
@@ -17,19 +17,21 @@ export default function TeamDisplay({ teams, features, onPlayerClick, selectedPl
 
   return (
     <div className="space-y-3">
-      {/* Balance badge */}
-      <div className="flex justify-center">
-        <span className={`text-xs font-medium px-3 py-1 rounded-full ${
-          allBalanced ? 'bg-green-100 text-green-700' :
-          anyBad ? 'bg-red-100 text-red-700' :
-          'bg-amber-100 text-amber-700'
-        }`}>
-          {allBalanced ? 'Excellent' : anyBad ? 'Fair' : 'Good'} balance
-        </span>
-      </div>
+      {/* Balance badge (admin only) */}
+      {isAdmin && (
+        <div className="flex justify-center">
+          <span className={`text-xs font-medium px-3 py-1 rounded-full ${
+            allBalanced ? 'bg-green-100 text-green-700' :
+            anyBad ? 'bg-red-100 text-red-700' :
+            'bg-amber-100 text-amber-700'
+          }`}>
+            {allBalanced ? 'Excellent' : anyBad ? 'Fair' : 'Good'} balance
+          </span>
+        </div>
+      )}
 
-      {/* Per-feature balance bars (the main view now) */}
-      {features.length > 0 && (
+      {/* Per-feature balance bars (admin only) */}
+      {isAdmin && features.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
           {featureDiffs.map(({ feature: f, totals, diff, maxVal }) => {
             const barMax = Math.max(...totals, 1)

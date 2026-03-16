@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { getPlayers, getFeatures, getConflicts } from '../store'
+import { getPlayers, getFeatures, getConflicts, getPresets } from '../store'
 import { generateTeams, recalcTeams, findBalanceSuggestions, TEAM_COLORS } from '../utils/teamBalancer'
-import { loadPresets } from '../cloudStore'
 import TeamDisplay from './TeamDisplay'
 
 const PHASE = {
@@ -48,7 +47,7 @@ function ActionButton({ onClick, disabled, children }) {
   )
 }
 
-export default function GameDay() {
+export default function GameDay({ isAdmin }) {
   const [allPlayers, setAllPlayers] = useState([])
   const [features, setFeatures] = useState([])
   const [conflicts, setConflicts] = useState([])
@@ -65,16 +64,14 @@ export default function GameDay() {
   const [insIds, setInsIds] = useState(new Set())
   const [suggestions, setSuggestions] = useState(null)
 
-  const [presets, setPresets] = useState(null)
+  const [presets, setPresetsLocal] = useState({ monday: [], friday: [] })
   const [activeDay, setActiveDay] = useState(null)
 
   useEffect(() => {
     setAllPlayers(getPlayers())
     setFeatures(getFeatures())
     setConflicts(getConflicts())
-    loadPresets()
-      .then(setPresets)
-      .catch(() => setPresets({ monday: [], friday: [] }))
+    setPresetsLocal(getPresets())
   }, [])
 
   const scoredPlayers = useMemo(() =>
@@ -183,8 +180,7 @@ export default function GameDay() {
       setSelectedIds(new Set())
     } else {
       setActiveDay(day)
-      if (!presets) return
-      const ids = presets[day] || []
+      const ids = presetsLocal[day] || []
       setSelectedIds(new Set(ids.filter(id => allPlayers.some(p => p.id === id))))
     }
   }
@@ -204,10 +200,10 @@ export default function GameDay() {
         />
 
         {/* Day picker */}
-        {presets && allPlayers.length > 0 && (
+        {allPlayers.length > 0 && (
           <div className="flex gap-2">
             {['monday', 'friday'].map(day => {
-              const count = (presets[day] || []).filter(id => allPlayers.some(p => p.id === id)).length
+              const count = (presetsLocal[day] || []).filter(id => allPlayers.some(p => p.id === id)).length
               return (
                 <button
                   key={day}
@@ -371,7 +367,7 @@ export default function GameDay() {
           </button>
         </div>
 
-        {teams && <TeamDisplay teams={teams} features={features} />}
+        {teams && <TeamDisplay teams={teams} features={features} isAdmin={isAdmin} />}
 
         {bench.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm p-4">
@@ -470,7 +466,7 @@ export default function GameDay() {
                 >
                   <span className={`text-[15px] ${isOut ? 'font-medium text-red-700' : 'text-gray-700'}`}>{p.name}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400 font-mono">{p.score.toFixed(1)}</span>
+                    {isAdmin && <span className="text-xs text-gray-400 font-mono">{p.score.toFixed(1)}</span>}
                     {isOut && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium">OUT</span>}
                   </div>
                 </div>
@@ -527,7 +523,7 @@ export default function GameDay() {
                   >
                     <span className={`text-[15px] ${isIn ? 'font-medium text-green-700' : 'text-gray-700'}`}>{p.name}</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400 font-mono">{p.score.toFixed(1)}</span>
+                      {isAdmin && <span className="text-xs text-gray-400 font-mono">{p.score.toFixed(1)}</span>}
                       {isIn && <span className="text-xs bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-medium">IN</span>}
                     </div>
                   </div>
@@ -631,7 +627,7 @@ export default function GameDay() {
         )}
 
         {/* Preview teams */}
-        <TeamDisplay teams={hasSuggestions ? optimizedDisplay : proposedDisplay} features={features} />
+        <TeamDisplay teams={hasSuggestions ? optimizedDisplay : proposedDisplay} features={features} isAdmin={isAdmin} />
 
         {/* Action buttons */}
         <div className="space-y-2 pb-2">

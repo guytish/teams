@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
-import { getFeatures, getPlayers, setPlayers, getConflicts, setConflicts } from '../store'
-import { loadPresets, savePresets } from '../cloudStore'
+import { getFeatures, getPlayers, setPlayers, getConflicts, setConflicts, getPresets, setPresets } from '../store'
 
 const DAYS = ['monday', 'friday']
 
-export default function PlayerManager() {
+export default function PlayerManager({ isAdmin }) {
   const [players, setLocal] = useState([])
   const [features, setFeatures] = useState([])
   const [showForm, setShowForm] = useState(false)
@@ -12,29 +11,26 @@ export default function PlayerManager() {
   const [name, setName] = useState('')
   const [ratings, setRatings] = useState({})
   const [search, setSearch] = useState('')
-  const [presets, setPresetsState] = useState(null)
+  const [presets, setPresetsLocal] = useState({ monday: [], friday: [] })
 
   useEffect(() => {
     setLocal(getPlayers())
     setFeatures(getFeatures())
-    loadPresets()
-      .then(setPresetsState)
-      .catch(() => setPresetsState({ monday: [], friday: [] }))
+    setPresetsLocal(getPresets())
   }, [])
 
-  const toggleDay = async (playerId, day) => {
-    if (!presets) return
+  const save = (updated) => { setLocal(updated); setPlayers(updated) }
+
+  const toggleDay = (playerId, day) => {
     const current = presets[day] || []
     const has = current.includes(playerId)
     const updated = {
       ...presets,
       [day]: has ? current.filter(id => id !== playerId) : [...current, playerId],
     }
-    setPresetsState(updated)
-    try { await savePresets(updated) } catch { }
+    setPresetsLocal(updated)
+    setPresets(updated)
   }
-
-  const save = (updated) => { setLocal(updated); setPlayers(updated) }
 
   const openAdd = () => {
     setEditing(null)
@@ -79,12 +75,14 @@ export default function PlayerManager() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="font-bold text-gray-800 text-lg">Players ({players.length})</h2>
-        <button
-          onClick={openAdd}
-          className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl active:bg-indigo-700 transition-colors text-sm font-semibold shadow-sm"
-        >
-          + Add
-        </button>
+        {isAdmin && (
+          <button
+            onClick={openAdd}
+            className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl active:bg-indigo-700 transition-colors text-sm font-semibold shadow-sm"
+          >
+            + Add
+          </button>
+        )}
       </div>
 
       {/* Search */}
@@ -98,8 +96,8 @@ export default function PlayerManager() {
         />
       )}
 
-      {/* Full-screen modal form */}
-      {showForm && (
+      {/* Full-screen modal form (admin only) */}
+      {showForm && isAdmin && (
         <div className="fixed inset-0 bg-gray-50 z-50 flex flex-col">
           <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200">
             <button
@@ -163,7 +161,7 @@ export default function PlayerManager() {
       {/* Player list */}
       {filtered.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 text-sm">
-          {players.length === 0 ? 'No players yet. Tap + Add to get started.' : 'No players match.'}
+          {players.length === 0 ? 'No players yet.' : 'No players match.'}
         </div>
       ) : (
         <div className="space-y-2.5">
@@ -171,48 +169,54 @@ export default function PlayerManager() {
             <div key={player.id} className="bg-white rounded-xl shadow-sm p-4">
               <div className="flex items-center justify-between mb-2.5">
                 <h3 className="font-bold text-gray-800 text-[15px]">{player.name}</h3>
-                <div className="flex gap-4">
-                  <button onClick={() => openEdit(player)} className="text-indigo-600 active:text-indigo-800 text-sm font-medium py-1">Edit</button>
-                  <button onClick={() => handleDelete(player.id)} className="text-red-500 active:text-red-700 text-sm font-medium py-1">Delete</button>
-                </div>
+                {isAdmin && (
+                  <div className="flex gap-4">
+                    <button onClick={() => openEdit(player)} className="text-indigo-600 active:text-indigo-800 text-sm font-medium py-1">Edit</button>
+                    <button onClick={() => handleDelete(player.id)} className="text-red-500 active:text-red-700 text-sm font-medium py-1">Delete</button>
+                  </div>
+                )}
               </div>
-              {presets && (
-                <div className="flex gap-2 mb-2.5">
-                  {DAYS.map(day => {
-                    const active = (presets[day] || []).includes(player.id)
+              {/* Day chips */}
+              <div className="flex gap-2 mb-2.5">
+                {DAYS.map(day => {
+                  const active = (presets[day] || []).includes(player.id)
+                  return (
+                    <button
+                      key={day}
+                      onClick={() => isAdmin && toggleDay(player.id, day)}
+                      className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                        active
+                          ? day === 'monday'
+                            ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                            : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                          : isAdmin
+                            ? 'bg-gray-50 text-gray-400 border border-gray-100'
+                            : 'hidden'
+                      }`}
+                    >
+                      {day === 'monday' ? 'Mon' : 'Fri'}
+                    </button>
+                  )
+                })}
+              </div>
+              {/* Rating bars (admin only) */}
+              {isAdmin && (
+                <div className="space-y-1.5">
+                  {features.map(f => {
+                    const val = player.ratings[f.id] || 0
+                    const pct = f.max > f.min ? ((val - f.min) / (f.max - f.min)) * 100 : 0
                     return (
-                      <button
-                        key={day}
-                        onClick={() => toggleDay(player.id, day)}
-                        className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                          active
-                            ? day === 'monday'
-                              ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                              : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                            : 'bg-gray-50 text-gray-400 border border-gray-100'
-                        }`}
-                      >
-                        {day === 'monday' ? 'Mon' : 'Fri'}
-                      </button>
+                      <div key={f.id} className="flex items-center gap-2">
+                        <span className="w-14 text-gray-500 text-xs truncate">{f.name}</span>
+                        <div className="flex-1 bg-gray-100 rounded-full h-2">
+                          <div className="bg-indigo-500 rounded-full h-2 transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                        <span className="w-5 text-right font-mono text-xs text-gray-600">{val}</span>
+                      </div>
                     )
                   })}
                 </div>
               )}
-              <div className="space-y-1.5">
-                {features.map(f => {
-                  const val = player.ratings[f.id] || 0
-                  const pct = f.max > f.min ? ((val - f.min) / (f.max - f.min)) * 100 : 0
-                  return (
-                    <div key={f.id} className="flex items-center gap-2">
-                      <span className="w-14 text-gray-500 text-xs truncate">{f.name}</span>
-                      <div className="flex-1 bg-gray-100 rounded-full h-2">
-                        <div className="bg-indigo-500 rounded-full h-2 transition-all" style={{ width: `${pct}%` }} />
-                      </div>
-                      <span className="w-5 text-right font-mono text-xs text-gray-600">{val}</span>
-                    </div>
-                  )
-                })}
-              </div>
             </div>
           ))}
         </div>
