@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
 import { getFeatures, getPlayers, setPlayers, getConflicts, setConflicts } from '../store'
+import { loadPresets, savePresets } from '../cloudStore'
+
+const DAYS = ['monday', 'friday']
 
 export default function PlayerManager() {
   const [players, setLocal] = useState([])
@@ -9,11 +12,25 @@ export default function PlayerManager() {
   const [name, setName] = useState('')
   const [ratings, setRatings] = useState({})
   const [search, setSearch] = useState('')
+  const [presets, setPresetsState] = useState(null)
 
   useEffect(() => {
     setLocal(getPlayers())
     setFeatures(getFeatures())
+    loadPresets().then(setPresetsState).catch(() => {})
   }, [])
+
+  const toggleDay = async (playerId, day) => {
+    if (!presets) return
+    const current = presets[day] || []
+    const has = current.includes(playerId)
+    const updated = {
+      ...presets,
+      [day]: has ? current.filter(id => id !== playerId) : [...current, playerId],
+    }
+    setPresetsState(updated)
+    try { await savePresets(updated) } catch { }
+  }
 
   const save = (updated) => { setLocal(updated); setPlayers(updated) }
 
@@ -157,6 +174,28 @@ export default function PlayerManager() {
                   <button onClick={() => handleDelete(player.id)} className="text-red-500 active:text-red-700 text-sm font-medium py-1">Delete</button>
                 </div>
               </div>
+              {presets && (
+                <div className="flex gap-2 mb-2.5">
+                  {DAYS.map(day => {
+                    const active = (presets[day] || []).includes(player.id)
+                    return (
+                      <button
+                        key={day}
+                        onClick={() => toggleDay(player.id, day)}
+                        className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                          active
+                            ? day === 'monday'
+                              ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                              : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                            : 'bg-gray-50 text-gray-400 border border-gray-100'
+                        }`}
+                      >
+                        {day === 'monday' ? 'Mon' : 'Fri'}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
               <div className="space-y-1.5">
                 {features.map(f => {
                   const val = player.ratings[f.id] || 0

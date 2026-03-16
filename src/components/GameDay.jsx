@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { getPlayers, getFeatures, getConflicts } from '../store'
 import { generateTeams, recalcTeams, findBalanceSuggestions, TEAM_COLORS } from '../utils/teamBalancer'
-import { loadPresets, savePresets } from '../cloudStore'
+import { loadPresets } from '../cloudStore'
 import TeamDisplay from './TeamDisplay'
 
 const PHASE = {
@@ -66,8 +66,7 @@ export default function GameDay() {
   const [suggestions, setSuggestions] = useState(null)
 
   const [presets, setPresets] = useState(null)
-  const [presetLoading, setPresetLoading] = useState(false)
-  const [presetSaving, setPresetSaving] = useState(null)
+  const [activeDay, setActiveDay] = useState(null)
 
   useEffect(() => {
     setAllPlayers(getPlayers())
@@ -176,20 +175,16 @@ export default function GameDay() {
     setPhase(PHASE.SELECT)
   }
 
-  const loadPreset = (day) => {
-    if (!presets) return
-    const ids = presets[day] || []
-    setSelectedIds(new Set(ids.filter(id => allPlayers.some(p => p.id === id))))
-  }
-
-  const savePreset = async (day) => {
-    setPresetSaving(day)
-    try {
-      const updated = { ...presets, [day]: [...selectedIds] }
-      await savePresets(updated)
-      setPresets(updated)
-    } catch { }
-    setPresetSaving(null)
+  const pickDay = (day) => {
+    if (activeDay === day) {
+      setActiveDay(null)
+      setSelectedIds(new Set())
+    } else {
+      setActiveDay(day)
+      if (!presets) return
+      const ids = presets[day] || []
+      setSelectedIds(new Set(ids.filter(id => allPlayers.some(p => p.id === id))))
+    }
   }
 
   // ====== RENDERS ======
@@ -206,38 +201,25 @@ export default function GameDay() {
           }
         />
 
-        {/* Presets */}
+        {/* Day picker */}
         {presets && allPlayers.length > 0 && (
           <div className="flex gap-2">
             {['monday', 'friday'].map(day => {
               const count = (presets[day] || []).filter(id => allPlayers.some(p => p.id === id)).length
-              const isActive = count > 0 && presets[day]?.length === selectedIds.size &&
-                presets[day]?.every(id => selectedIds.has(id))
               return (
-                <div key={day} className="flex-1 flex gap-1">
-                  <button
-                    onClick={() => loadPreset(day)}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-                      isActive
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'bg-white border border-gray-200 text-gray-700 active:bg-gray-50 shadow-sm'
-                    }`}
-                  >
-                    {day.charAt(0).toUpperCase() + day.slice(1)} {count > 0 && `(${count})`}
-                  </button>
-                  <button
-                    onClick={() => savePreset(day)}
-                    disabled={selectedIds.size === 0 || presetSaving === day}
-                    className="px-2.5 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-400 active:bg-gray-50 shadow-sm disabled:opacity-30"
-                    title={`Save current selection as ${day}`}
-                  >
-                    {presetSaving === day ? (
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                    ) : (
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
-                    )}
-                  </button>
-                </div>
+                <button
+                  key={day}
+                  onClick={() => pickDay(day)}
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                    activeDay === day
+                      ? day === 'monday'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-emerald-600 text-white shadow-sm'
+                      : 'bg-white border border-gray-200 text-gray-700 active:bg-gray-50 shadow-sm'
+                  }`}
+                >
+                  {day === 'monday' ? 'Monday' : 'Friday'} {count > 0 && `(${count})`}
+                </button>
               )
             })}
           </div>
