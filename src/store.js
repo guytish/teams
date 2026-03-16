@@ -54,7 +54,10 @@ function scheduleSyncToCloud() {
 
 export async function initFromCloud() {
   try {
-    const cloud = await loadCloudData()
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout')), 8000)
+    )
+    const cloud = await Promise.race([loadCloudData(), timeout])
 
     if (cloud.players && cloud.players.length > 0) {
       save(KEYS.players, cloud.players)
