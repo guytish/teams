@@ -64,7 +64,7 @@ export default function GameDay({ isAdmin }) {
   const [insIds, setInsIds] = useState(new Set())
   const [suggestions, setSuggestions] = useState(null)
 
-  const [presets, setPresetsLocal] = useState({ monday: [], friday: [] })
+  const [presetsLocal, setPresetsLocal] = useState({ monday: [], friday: [] })
   const [activeDay, setActiveDay] = useState(null)
 
   useEffect(() => {
